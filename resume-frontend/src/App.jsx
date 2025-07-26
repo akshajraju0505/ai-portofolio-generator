@@ -29,7 +29,7 @@ function App() {
     setResponse('');
 
     try {
-      const res = await fetch("https://resume-backend-n71l.onrender.com/upload-resume/", {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/upload-resume/`, {
         method: 'POST',
         body: formData,
       });
