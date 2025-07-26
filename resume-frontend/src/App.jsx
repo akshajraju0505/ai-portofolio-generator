@@ -28,7 +28,7 @@ function App() {
     setResponse('');
 
     try {
-      const res = await fetch('http://localhost:8000/upload-resume/', {
+      const res = await fetch('https://resume-backend.onrender.com', {
         method: 'POST',
         body: formData,
       });
