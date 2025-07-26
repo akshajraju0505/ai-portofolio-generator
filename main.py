@@ -3,7 +3,7 @@ import os
 import pdfplumber
 import docx
 import logging
-import openai
+from openai import OpenAI
 import requests
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -48,23 +48,24 @@ def generate_protfolio_content(resume_text: str) -> dict:
     """
 
     try:
-        openai.api_key = os.getenv("GROQ_API_KEY")
-        openai.api_base = "https://api.groq.com/openai/v1"
-
-        response = openai.ChatCompletion.create(
-            model="llama3-8b-8192",  # or llama3-70b if you want higher quality
-            messages=[
-                {"role": "system", "content": "You are a helpful AI assistant."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
+        client = OpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=os.getenv("GROQ_API_KEY"),
         )
 
-        content = response.choices[0].message["content"]
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {"role": "system", "content": "You are a personal branding assistant."},
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        generated_text = response.choices[0].message.content
 
         return {
             "success": True,
-            "content": content
+            "content": generated_text  # ✅ fixed this line
         }
 
     except Exception as e:
@@ -73,6 +74,7 @@ def generate_protfolio_content(resume_text: str) -> dict:
             "error": str(e),
             "error_type": "groq_api_error"
         }
+
 
 @app.get("/")
 def read_root():
