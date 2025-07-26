@@ -3,6 +3,7 @@ import os
 import pdfplumber
 import docx
 import logging
+import openai
 import requests
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +28,7 @@ def generate_protfolio_content(resume_text: str) -> dict:
             "error": "Empty or invalid resume text provided",
             "error_type": "validation_error"
         }
-    
+
     if len(resume_text.strip()) < 50:
         return {
             "success": False,
@@ -47,27 +48,31 @@ def generate_protfolio_content(resume_text: str) -> dict:
     """
 
     try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3", "prompt": prompt, "stream": False},
-            timeout=600
+        openai.api_key = os.getenv("GROQ_API_KEY")
+        openai.api_base = "https://api.groq.com/openai/v1"
+
+        response = openai.ChatCompletion.create(
+            model="llama3-8b-8192",  # or llama3-70b if you want higher quality
+            messages=[
+                {"role": "system", "content": "You are a helpful AI assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.7,
         )
 
-        response.raise_for_status()
-        data = response.json()
+        content = response.choices[0].message["content"]
 
         return {
             "success": True,
-            "content": data.get("response", "")
+            "content": content
         }
 
-    except requests.RequestException as e:
+    except Exception as e:
         return {
             "success": False,
             "error": str(e),
-            "error_type": "llama_error"
+            "error_type": "groq_api_error"
         }
-
 
 @app.get("/")
 def read_root():
