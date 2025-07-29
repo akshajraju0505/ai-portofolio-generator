@@ -320,21 +320,21 @@ Generated on: ${new Date().toLocaleString()}
             onDragOver={handleDragOver}
             onDragEnter={handleDragEnter}
             onDragLeave={handleDragLeave}
-            className="w-full border-2 border-dashed border-gray-400 rounded-lg p-8 text-center text-gray-500 hover:border-blue-600 transition-colors duration-200"
+            className="w-full border-2 border-dashed border-gray-400 rounded-lg p-6 text-center text-gray-500 hover:border-blue-600 transition-colors duration-200"
           >
-            <div className="space-y-2">
-              <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+            <div className="space-y-1">
+              <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                 <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <p className="text-lg">Drag and drop your resume here</p>
-              <p className="text-sm text-gray-400">or click below to select</p>
+              <p className="text-base">Drag and drop your resume here</p>
+              <p className="text-xs text-gray-400">or click below to select</p>
             </div>
             
             <input
               type="file"
               accept=".pdf,.docx"
               onChange={handleFileChange}
-              className="block w-full mt-4 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="block w-full mt-3 text-sm text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
             
             {file && (
@@ -412,9 +412,9 @@ Generated on: ${new Date().toLocaleString()}
               </button>
             </div>
 
-            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Code Editor */}
-              <div className="border rounded-lg overflow-hidden h-[600px]">
+            <div className="mt-6 space-y-6">
+              {/* Code Editor - Full Width Rectangle */}
+              <div className="border rounded-lg overflow-hidden h-[500px]">
                 <div className="bg-gray-800 text-white px-4 py-2 text-sm font-medium">
                   {activeTab.toUpperCase()} Editor
                 </div>
@@ -426,11 +426,12 @@ Generated on: ${new Date().toLocaleString()}
                   theme="vs-dark"
                   options={{
                     minimap: { enabled: false },
-                    fontSize: 14,
+                    fontSize: 16,
                     wordWrap: 'on',
                     lineNumbers: 'on',
                     scrollBeyondLastLine: false,
-                    automaticLayout: true
+                    automaticLayout: true,
+                    padding: { top: 16, bottom: 16 }
                   }}
                   loading={
                     <div className="flex items-center justify-center h-full">
@@ -443,8 +444,8 @@ Generated on: ${new Date().toLocaleString()}
                 />
               </div>
 
-              {/* Live Preview */}
-              <div className="border rounded-lg overflow-hidden h-[600px] bg-white">
+              {/* Live Preview - Smaller Rectangle */}
+              <div className="border rounded-lg overflow-hidden h-[400px] bg-white">
                 <div className="bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium border-b">
                   Live Preview
                 </div>
