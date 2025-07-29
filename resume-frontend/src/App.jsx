@@ -297,77 +297,66 @@ Generated on: ${new Date().toLocaleString()}
           <div className="mt-3">
             {backendHealth?.status === 'healthy' && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                ✓ Connected
+                Connected
               </span>
             )}
             {backendHealth?.status === 'unhealthy' && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                ⚠ Service Issues
+                Service Issues
               </span>
             )}
             {backendHealth?.status === 'unreachable' && (
               <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                ✗ Disconnected
+                Disconnected
               </span>
             )}
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div
-            ref={dropRef}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            className="w-full border-2 border-dashed border-gray-400 rounded-lg p-6 text-center text-gray-500 hover:border-blue-600 transition-colors duration-200"
-          >
-            <div className="space-y-1">
-              <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
-                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <p className="text-base">Drag and drop your resume here</p>
-              <p className="text-xs text-gray-400">or click below to select</p>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="resume-upload" className="block text-sm font-medium text-gray-700 mb-2">
+                Select Resume File (PDF or DOCX)
+              </label>
+              <input
+                id="resume-upload"
+                type="file"
+                accept=".pdf,.docx"
+                onChange={handleFileChange}
+                className="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none focus:border-blue-500 file:py-2 file:px-4 file:mr-4 file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              />
+              
+              {file && (
+                <div className="mt-2 p-2 bg-blue-50 rounded text-blue-700 text-sm">
+                  Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                </div>
+              )}
             </div>
-            
-            <input
-              type="file"
-              accept=".pdf,.docx"
-              onChange={handleFileChange}
-              className="block w-full mt-3 text-sm text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-            />
-            
-            {file && (
-              <div className="mt-3 p-2 bg-blue-50 rounded text-blue-700 text-sm">
-                Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-              </div>
-            )}
-          </div>
 
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={loading || !file || backendHealth?.status !== 'healthy'}
-          >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Processing Resume...
-              </span>
-            ) : 'Generate Portfolio'}
-          </button>
+            <button
+              type="submit"
+              className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !file || backendHealth?.status !== 'healthy'}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing Resume...
+                </span>
+              ) : 'Generate Portfolio'}
+            </button>
+          </div>
         </form>
 
         {/* Success Message */}
         {success && (
           <div className="mt-4 p-3 bg-green-100 text-green-700 rounded-lg border border-green-200">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+              <span className="h-5 w-5 text-green-500 mr-2">●</span>
               {success}
             </div>
           </div>
@@ -377,9 +366,7 @@ Generated on: ${new Date().toLocaleString()}
         {error && (
           <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg border border-red-200">
             <div className="flex items-center">
-              <svg className="h-5 w-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+              <span className="h-5 w-5 text-red-500 mr-2">●</span>
               {error}
             </div>
           </div>
@@ -412,9 +399,9 @@ Generated on: ${new Date().toLocaleString()}
               </button>
             </div>
 
-            <div className="mt-6 space-y-6">
-              {/* Code Editor - Full Width Rectangle */}
-              <div className="border rounded-lg overflow-hidden h-[500px]">
+            <div className="mt-6 space-y-4">
+              {/* Code Editor - Much Larger */}
+              <div className="border rounded-lg overflow-hidden h-[700px]">
                 <div className="bg-gray-800 text-white px-4 py-2 text-sm font-medium">
                   {activeTab.toUpperCase()} Editor
                 </div>
@@ -426,12 +413,13 @@ Generated on: ${new Date().toLocaleString()}
                   theme="vs-dark"
                   options={{
                     minimap: { enabled: false },
-                    fontSize: 16,
+                    fontSize: 18,
                     wordWrap: 'on',
                     lineNumbers: 'on',
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
-                    padding: { top: 16, bottom: 16 }
+                    padding: { top: 20, bottom: 20 },
+                    lineHeight: 26
                   }}
                   loading={
                     <div className="flex items-center justify-center h-full">
@@ -444,8 +432,8 @@ Generated on: ${new Date().toLocaleString()}
                 />
               </div>
 
-              {/* Live Preview - Smaller Rectangle */}
-              <div className="border rounded-lg overflow-hidden h-[400px] bg-white">
+              {/* Live Preview - Much Smaller */}
+              <div className="border rounded-lg overflow-hidden h-[250px] bg-white">
                 <div className="bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium border-b">
                   Live Preview
                 </div>
@@ -479,9 +467,7 @@ Generated on: ${new Date().toLocaleString()}
             {deployedUrl && (
               <div className="mt-6 p-4 bg-green-100 text-green-800 rounded-lg border border-green-200 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <svg className="h-6 w-6 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+                  <span className="h-6 w-6 text-green-600 mr-2">●</span>
                   <span className="font-semibold">Portfolio Successfully Deployed!</span>
                 </div>
                 <a
@@ -491,9 +477,7 @@ Generated on: ${new Date().toLocaleString()}
                   className="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium underline"
                 >
                   {deployedUrl}
-                  <svg className="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
+                  <span className="ml-1">↗</span>
                 </a>
               </div>
             )}
