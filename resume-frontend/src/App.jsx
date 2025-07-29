@@ -2,11 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Editor } from '@monaco-editor/react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import {
-  PanelGroup,
-  Panel,
-  PanelResizeHandle,
-} from 'react-resizable-panels';
 
 function App() {
   const [file, setFile] = useState(null);
@@ -20,24 +15,20 @@ function App() {
   const [deploying, setDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState('');
   const [activeTab, setActiveTab] = useState('html');
-  const [backendHealth, setBackendHealth] = useState(null);
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
   useEffect(() => {
-    fetch(`${backendUrl}/health`)
-      .then((res) => res.json())
-      .then(setBackendHealth)
-      .catch(() => setBackendHealth({ status: 'unreachable' }));
+    fetch(`${backendUrl}/health`).catch(() => {});
   }, []);
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (!selected) return;
 
-    const validTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     const ext = selected.name.toLowerCase().split('.').pop();
-    if (validTypes.includes(selected.type) || ['pdf', 'docx'].includes(ext)) {
+    const valid = ['pdf', 'docx'];
+    if (valid.includes(ext)) {
       setFile(selected);
       setError('');
       setSuccess(`Selected: ${selected.name}`);
@@ -117,12 +108,13 @@ function App() {
     else setJsCode(val || '');
   };
 
+  const getLanguage = () => (activeTab === 'html' ? 'html' : activeTab === 'css' ? 'css' : 'javascript');
+
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-screen-xl mx-auto bg-white p-6 rounded shadow-lg">
         <h1 className="text-3xl font-bold text-center mb-4">AI Resume to Portfolio Generator</h1>
-
-        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
+        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
           <input type="file" accept=".pdf,.docx" onChange={handleFileChange} />
           <button
             type="submit"
@@ -139,7 +131,7 @@ function App() {
         {showEditor && (
           <>
             {/* Tabs */}
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="flex gap-2 mb-4">
               {['html', 'css', 'js'].map((tab) => (
                 <button
                   key={tab}
@@ -159,35 +151,30 @@ function App() {
               </button>
             </div>
 
-            {/* Resizable Editor/Preview */}
-            <div className="h-[600px] border rounded-lg overflow-hidden">
-              <PanelGroup direction="horizontal">
-                <Panel defaultSize={60} minSize={30}>
-                  <Editor
-                    height="100%"
-                    language={
-                      activeTab === 'html' ? 'html' : activeTab === 'css' ? 'css' : 'javascript'
-                    }
-                    value={getCurrentCode()}
-                    onChange={(value) => setCurrentCode(value || '')}
-                    theme="vs-dark"
-                    options={{
-                      fontSize: 16,
-                      minimap: { enabled: false },
-                      automaticLayout: true,
-                    }}
-                  />
-                </Panel>
-                <PanelResizeHandle className="w-2 bg-gray-300 cursor-col-resize" />
-                <Panel defaultSize={40} minSize={30}>
-                  <iframe
-                    title="Live Preview"
-                    className="w-full h-full border-none"
-                    sandbox="allow-scripts allow-same-origin"
-                    srcDoc={`<html><head><style>${cssCode}</style></head><body>${htmlCode}<script>${jsCode}</script></body></html>`}
-                  />
-                </Panel>
-              </PanelGroup>
+            {/* Responsive Editor & Preview */}
+            <div className="flex flex-col md:flex-row gap-4 h-[600px]">
+              <div className="flex-1 border rounded overflow-hidden">
+                <Editor
+                  height="100%"
+                  language={getLanguage()}
+                  value={getCurrentCode()}
+                  onChange={(v) => setCurrentCode(v || '')}
+                  theme="vs-dark"
+                  options={{
+                    fontSize: 16,
+                    minimap: { enabled: false },
+                    automaticLayout: true,
+                  }}
+                />
+              </div>
+              <div className="flex-1 border rounded bg-white">
+                <iframe
+                  title="Live Preview"
+                  className="w-full h-full border-none"
+                  sandbox="allow-scripts allow-same-origin"
+                  srcDoc={`<html><head><style>${cssCode}</style></head><body>${htmlCode}<script>${jsCode}</script></body></html>`}
+                />
+              </div>
             </div>
 
             {/* Deploy */}
