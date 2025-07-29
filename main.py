@@ -8,6 +8,7 @@ import docx
 import shutil
 import logging
 import json
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -77,97 +78,263 @@ def chunk_text(text, max_chunk_size=2000):
 
 def summarize(client, chunk, i):
     prompt = f"Summarize part {i+1} of a resume:\n\n{chunk}\n\nFocus on About, Skills, Work, and Projects."
-    resp = client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ],
-    )
-    return resp.choices[0].message.content.strip()
-
-import re
+    try:
+        resp = client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.3,
+            max_tokens=500
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        logger.error(f"Error in summarize: {str(e)}")
+        return f"Summary of resume section {i+1}: {chunk[:200]}..."
 
 def safe_parse_llm_json(text: str):
+    """Improved JSON parsing with better error handling and cleaning"""
+    if not text or not text.strip():
+        raise HTTPException(status_code=500, detail="Empty response from AI model")
+    
+    # Log the raw response for debugging
+    logger.info(f"Raw LLM response: {text[:500]}...")
+    
     # Remove code block wrapper if present
-    if text.strip().startswith("```"):
-        text = re.sub(r"^```(json)?", "", text.strip(), flags=re.IGNORECASE).strip()
-        text = re.sub(r"```$", "", text.strip())
-
-    # Replace single quotes with double quotes if needed
-    if "'" in text and '"' not in text:
-        text = text.replace("'", '"')
-
+    cleaned_text = text.strip()
+    if cleaned_text.startswith("```"):
+        # Find the first occurrence of ``` and the last
+        start_idx = cleaned_text.find("```")
+        if start_idx != -1:
+            # Skip the first ``` line
+            newline_after_first = cleaned_text.find("\n", start_idx)
+            if newline_after_first != -1:
+                cleaned_text = cleaned_text[newline_after_first + 1:]
+            
+            # Remove trailing ```
+            if cleaned_text.endswith("```"):
+                cleaned_text = cleaned_text[:-3].strip()
+    
+    # Try to find JSON object within the text
+    json_start = cleaned_text.find("{")
+    json_end = cleaned_text.rfind("}") + 1
+    
+    if json_start != -1 and json_end > json_start:
+        cleaned_text = cleaned_text[json_start:json_end]
+    
+    # Replace single quotes with double quotes (common LLM mistake)
+    # But be careful not to replace quotes inside strings
+    if "'" in cleaned_text and '"' not in cleaned_text:
+        cleaned_text = cleaned_text.replace("'", '"')
+    
     try:
-        return json.loads(text)
+        parsed_json = json.loads(cleaned_text)
+        
+        # Validate required fields
+        required_fields = ["html_code", "css_code", "js_code"]
+        for field in required_fields:
+            if field not in parsed_json:
+                parsed_json[field] = get_default_code(field)
+        
+        return parsed_json
+        
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON from model: {str(e)}")
+        logger.error(f"JSON parsing failed: {str(e)}")
+        logger.error(f"Cleaned text: {cleaned_text}")
+        
+        # Return default structure if parsing fails
+        return get_fallback_portfolio()
+
+def get_default_code(field_type: str) -> str:
+    """Get default code for each file type"""
+    defaults = {
+        "html_code": '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Portfolio</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio</h1>
+        <p>Generated from resume</p>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>''',
+        "css_code": '''* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f4f4f4;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}''',
+        "js_code": '''console.log("Portfolio loaded successfully");
+
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("DOM loaded");
+});'''
+    }
+    return defaults.get(field_type, "// Default code")
+
+def get_fallback_portfolio() -> dict:
+    """Return a basic portfolio structure when AI fails"""
+    return {
+        "html_code": get_default_code("html_code"),
+        "css_code": get_default_code("css_code"),
+        "js_code": get_default_code("js_code")
+    }
 
 def generate_code_from_summary(client, summary):
+    """Improved code generation with better prompts and error handling"""
     prompt = f"""
-Using the resume summary below, generate 3 separate code files:
-
-1. A valid `index.html` using semantic HTML with Tailwind CSS linked (via <link href="style.css">).
-2. A simple `style.css` file for layout and colors.
-3. A `script.js` file with minimal interactivity (if needed).
-
-Respond ONLY with a JSON object like this:
+Create a professional portfolio website based on this resume summary. Return ONLY a valid JSON object with exactly this structure:
 
 {{
-  "html_code": "<!DOCTYPE html>...",
-  "css_code": "body {{ background: white; }}",
-  "js_code": "console.log('...');"
+  "html_code": "complete HTML code here",
+  "css_code": "complete CSS code here", 
+  "js_code": "complete JavaScript code here"
 }}
+
+Requirements:
+- HTML must be complete with DOCTYPE, head, body
+- Link CSS as: <link rel="stylesheet" href="style.css">
+- Link JS as: <script src="script.js"></script>
+- Use modern, professional styling
+- Make it responsive
+- Include sections for: About, Skills, Experience, Projects
+- NO markdown, NO explanations, ONLY the JSON object
 
 Resume Summary:
 {summary}
 """
-    resp = client.chat.completions.create(
-        model="llama3-8b-8192",
-        messages=[{"role": "user", "content": prompt}]
-    )
 
-    text = resp.choices[0].message.content.strip()
-    return safe_parse_llm_json(text)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Attempt {attempt + 1} to generate code")
+            
+            resp = client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[
+                    {"role": "system", "content": "You are a web developer. Return only valid JSON with no additional text."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,  # Lower temperature for more consistent output
+                max_tokens=3000
+            )
 
+            response_text = resp.choices[0].message.content.strip()
+            
+            if not response_text:
+                logger.warning(f"Empty response on attempt {attempt + 1}")
+                continue
+                
+            return safe_parse_llm_json(response_text)
+            
+        except Exception as e:
+            logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
+            if attempt == max_retries - 1:
+                logger.error("All attempts failed, returning fallback portfolio")
+                return get_fallback_portfolio()
+            continue
 
 @app.post("/upload-resume/")
 async def upload_resume(file: UploadFile = File(...)):
-    ext = os.path.splitext(file.filename)[-1].lower()
-    if ext not in [".pdf", ".docx"]:
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX are allowed")
-
-    # Save temp file
-    os.makedirs("temp_files", exist_ok=True)
-    path = f"temp_files/{file.filename}"
-    with open(path, "wb") as f:
-        f.write(await file.read())
-
-    # Extract text
     try:
-        if ext == ".pdf":
-            text = extract_text_from_pdf(path)
-        else:
-            text = extract_text_from_docx(path)
-    finally:
-        os.remove(path)
+        ext = os.path.splitext(file.filename)[-1].lower()
+        if ext not in [".pdf", ".docx"]:
+            raise HTTPException(status_code=400, detail="Only PDF and DOCX are allowed")
 
-    if not text.strip():
-        raise HTTPException(status_code=400, detail="No text extracted from resume")
+        # Save temp file
+        os.makedirs("temp_files", exist_ok=True)
+        path = f"temp_files/{file.filename}"
+        
+        try:
+            with open(path, "wb") as f:
+                content = await file.read()
+                f.write(content)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
 
-    # Process with LLM
-    client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=os.getenv("GROQ_API_KEY"),
-    )
+        # Extract text
+        try:
+            if ext == ".pdf":
+                text = extract_text_from_pdf(path)
+            else:
+                text = extract_text_from_docx(path)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to extract text: {str(e)}")
+        finally:
+            # Clean up temp file
+            if os.path.exists(path):
+                os.remove(path)
 
-    chunks = chunk_text(text)
-    summary = "\n\n".join([summarize(client, c, i) for i, c in enumerate(chunks)])
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="No text extracted from resume")
 
-    result = generate_code_from_summary(client, summary)
-    return JSONResponse(content=result)
+        # Process with LLM
+        try:
+            client = OpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=os.getenv("GROQ_API_KEY"),
+            )
+            
+            if not os.getenv("GROQ_API_KEY"):
+                raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
 
+            chunks = chunk_text(text)
+            logger.info(f"Processing {len(chunks)} chunks")
+            
+            summaries = []
+            for i, chunk in enumerate(chunks):
+                summary = summarize(client, chunk, i)
+                summaries.append(summary)
+            
+            combined_summary = "\n\n".join(summaries)
+            logger.info(f"Generated summary length: {len(combined_summary)}")
+
+            result = generate_code_from_summary(client, combined_summary)
+            return JSONResponse(content=result)
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"LLM processing error: {str(e)}")
+            # Return fallback portfolio instead of failing
+            result = get_fallback_portfolio()
+            return JSONResponse(content=result)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
 
 @app.get("/")
 def root():
     return {"message": "Resume to Portfolio API is running."}
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "groq_key_configured": bool(os.getenv("GROQ_API_KEY"))
+    }
