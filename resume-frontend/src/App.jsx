@@ -22,11 +22,11 @@ function App() {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       setFile(selectedFile);
-      resetState();
+      resetEditorStates();
     }
   };
 
-  const resetState = () => {
+  const resetEditorStates = () => {
     setError('');
     setHtmlCode('');
     setCssCode('');
@@ -40,7 +40,7 @@ function App() {
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile && (droppedFile.type === 'application/pdf' || droppedFile.name.endsWith('.docx'))) {
       setFile(droppedFile);
-      resetState();
+      resetEditorStates();
     } else {
       setError('Only PDF or DOCX files are supported.');
     }
@@ -56,7 +56,7 @@ function App() {
     formData.append('file', file);
 
     setLoading(true);
-    resetState();
+    resetEditorStates();
 
     try {
       const res = await fetch(`${backendUrl}/upload-resume/`, {
@@ -64,11 +64,17 @@ function App() {
         body: formData,
       });
 
-      const text = await res.text(); // safer than .json() in case of error
-      const data = JSON.parse(text);
+      const text = await res.text();
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('Invalid response from backend. Try again.');
+      }
 
       if (!res.ok) {
-        throw new Error(data.detail || 'Something went wrong');
+        throw new Error(data.detail || 'Upload failed.');
       }
 
       setHtmlCode(data.html_code || '<!-- No HTML generated -->');
@@ -77,7 +83,7 @@ function App() {
       setShowEditor(true);
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to connect to backend.');
+      setError(err.message || 'Connection failed.');
     }
 
     setLoading(false);
@@ -100,10 +106,16 @@ function App() {
       });
 
       const text = await res.text();
-      const data = JSON.parse(text);
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('Invalid response from deployment.');
+      }
 
       if (!res.ok) {
-        throw new Error(data.detail || 'Deployment failed');
+        throw new Error(data.detail || 'Deployment failed.');
       }
 
       setDeployedUrl(data.url);
@@ -121,8 +133,8 @@ function App() {
     zip.file('style.css', cssCode);
     zip.file('script.js', jsCode);
 
-    const content = await zip.generateAsync({ type: 'blob' });
-    saveAs(content, 'portfolio.zip');
+    const blob = await zip.generateAsync({ type: 'blob' });
+    saveAs(blob, 'portfolio.zip');
   };
 
   const getCurrentCode = () => {
@@ -165,9 +177,7 @@ function App() {
           </button>
         </form>
 
-        {error && (
-          <div className="mt-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>
-        )}
+        {error && <div className="mt-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
 
         {showEditor && (
           <>

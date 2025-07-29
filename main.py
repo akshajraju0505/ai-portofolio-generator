@@ -1,21 +1,24 @@
-# main.py
 from fastapi import FastAPI, File, UploadFile, HTTPException
-import os
-import pdfplumber
-import docx
-import logging
-from openai import OpenAI
-from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import os
+import pdfplumber
+import docx
+import shutil
+import logging
 import json
+from dotenv import load_dotenv
+from openai import OpenAI
 
+# === Load environment ===
 load_dotenv()
-app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+app = FastAPI()
+
+# === CORS for frontend ===
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,22 +27,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === Deploy Request ===
+# === Models ===
 class DeployRequest(BaseModel):
     html_code: str
     css_code: str
     js_code: str
 
-# === Dummy deployer function ===
-def deploy_html_code(html, css, js):
-    # Mocked deployment logic — replace with actual Netlify CLI logic
+# === Dummy deploy function ===
+def deploy_html_code(html: str, css: str, js: str) -> str:
     folder = "deployed_site"
     os.makedirs(folder, exist_ok=True)
-    with open(f"{folder}/index.html", "w") as f:
+    with open(os.path.join(folder, "index.html"), "w") as f:
         f.write(html)
-    with open(f"{folder}/style.css", "w") as f:
+    with open(os.path.join(folder, "style.css"), "w") as f:
         f.write(css)
-    with open(f"{folder}/script.js", "w") as f:
+    with open(os.path.join(folder, "script.js"), "w") as f:
         f.write(js)
     return "https://example.netlify.app"
 
@@ -51,7 +53,8 @@ async def deploy_site(data: DeployRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# === Resume Text Extraction ===
+
+# === Resume Handling ===
 def extract_text_from_pdf(path: str) -> str:
     with pdfplumber.open(path) as pdf:
         return "\n".join([page.extract_text() or "" for page in pdf.pages])
@@ -85,31 +88,43 @@ def summarize(client, chunk, i):
 
 def generate_code_from_summary(client, summary):
     prompt = f"""
-Generate a modern portfolio site based on this resume summary.
-Return three strings:
-- HTML file (reference style.css and script.js)
-- CSS file (basic Tailwind or utility-based styling)
-- JS file (simple interactive features)
+You are a portfolio website generator AI.
+
+Generate 3 files from the following resume summary:
+
+1. `index.html`:
+   - Use semantic HTML
+   - Add `<script src="https://cdn.tailwindcss.com"></script>` in the `<head>`
+   - Link to `style.css`
+
+2. `style.css`: Minimal styles only
+
+3. `script.js`: Minimal interaction or console log
+
+Respond ONLY with a JSON object like:
+{{
+  "html_code": "<!DOCTYPE html>...",
+  "css_code": "body {{ background: white; }}",
+  "js_code": "console.log('Hello')"
+}}
 
 Resume Summary:
 {summary}
+"""
 
-Respond with valid JSON object like:
-{{
-  "html_code": "<!DOCTYPE html>...</html>",
-  "css_code": "body {{ ... }}",
-  "js_code": "console.log('...')"
-}}
-    """
     resp = client.chat.completions.create(
         model="llama3-8b-8192",
         messages=[{"role": "user", "content": prompt}]
     )
 
+    raw = resp.choices[0].message.content.strip()
+    logger.debug("Raw model response: %s", repr(raw))
+
     try:
-        return json.loads(resp.choices[0].message.content.strip())
+        return json.loads(raw)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"Invalid JSON from model: {str(e)}")
+
 
 @app.post("/upload-resume/")
 async def upload_resume(file: UploadFile = File(...)):
@@ -117,24 +132,28 @@ async def upload_resume(file: UploadFile = File(...)):
     if ext not in [".pdf", ".docx"]:
         raise HTTPException(status_code=400, detail="Only PDF and DOCX are allowed")
 
+    # Save temp file
     os.makedirs("temp_files", exist_ok=True)
     path = f"temp_files/{file.filename}"
     with open(path, "wb") as f:
         f.write(await file.read())
 
-    if ext == ".pdf":
-        text = extract_text_from_pdf(path)
-    else:
-        text = extract_text_from_docx(path)
-
-    os.remove(path)
+    # Extract text
+    try:
+        if ext == ".pdf":
+            text = extract_text_from_pdf(path)
+        else:
+            text = extract_text_from_docx(path)
+    finally:
+        os.remove(path)
 
     if not text.strip():
         raise HTTPException(status_code=400, detail="No text extracted from resume")
 
+    # Process with LLM
     client = OpenAI(
         base_url="https://api.groq.com/openai/v1",
-        api_key=os.getenv("GROQ_API_KEY")
+        api_key=os.getenv("GROQ_API_KEY"),
     )
 
     chunks = chunk_text(text)
@@ -142,3 +161,8 @@ async def upload_resume(file: UploadFile = File(...)):
 
     result = generate_code_from_summary(client, summary)
     return JSONResponse(content=result)
+
+
+@app.get("/")
+def root():
+    return {"message": "Resume to Portfolio API is running."}
