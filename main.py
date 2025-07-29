@@ -6,10 +6,9 @@ import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Request
 from pydantic import BaseModel
-from deployer import deploy_html_code 
-import shutil
+from deployer import deploy_html_code
+
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,17 +22,20 @@ app.add_middleware(
 )
 
 load_dotenv()
+
 class DeployRequest(BaseModel):
     html_code: str
+    css_code: str
+    js_code: str
 
 @app.post("/deploy-site/")
 async def deploy_site(data: DeployRequest):
     try:
-        url = deploy_html_code(data.html_code)
+        url = deploy_html_code(data.html_code, data.css_code, data.js_code)
         return {"url": url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-        
+
 def chunk_text(text, max_chunk_size=2000):
     words = text.split()
     chunks, current = [], ""
@@ -59,69 +61,59 @@ def summarize_chunk(client, chunk, index):
     return response.choices[0].message.content.strip()
 
 def generate_portfolio_content(resume_text: str) -> dict:
-    if not resume_text or not resume_text.strip():
-        return {
-            "success": False,
-            "error": "Empty or invalid resume text provided",
-            "error_type": "validation_error"
-        }
+    if not resume_text.strip():
+        return {"success": False, "error": "Empty resume", "error_type": "validation_error"}
 
     try:
         client = OpenAI(
             base_url="https://api.groq.com/openai/v1",
             api_key=os.getenv("GROQ_API_KEY"),
         )
-
         chunks = chunk_text(resume_text)
         summaries = [summarize_chunk(client, chunk, idx) for idx, chunk in enumerate(chunks)]
-
         combined_summary = "\n\n".join(summaries)
 
         final_prompt = f"""
 You are a portfolio website generator AI.
 
-Using the following resume summary, generate a complete, single-file HTML portfolio website using Tailwind CSS.
+Using the resume summary below, generate a professional portfolio with 3 separate files: index.html, style.css, and script.js.
 
 Requirements:
-- Use semantic HTML
-- Use modern, clean Tailwind CSS styling
-- Include the following sections:
-  - About Me
-  - Skills (as a bullet list)
-  - Work Experience (role, company, short description)
-  - Projects (project title, description, optional link)
+- HTML must use semantic structure and link to external style.css and script.js
+- CSS should use modern Tailwind-style or clean responsive styling
+- JS (if needed) should include smooth scroll or navbar logic
+- Include sections: About Me, Skills, Work Experience, Projects
 
-Only return the full HTML code (starting with <!DOCTYPE html>). No explanations.
+Only return JSON in this format (no explanation):
+
+{{
+  "html_code": "<!DOCTYPE html>...</html>",
+  "css_code": "body {{...}}",
+  "js_code": "console.log('...')"
+}}
 
 Resume Summary:
 {combined_summary}
         """
 
-        final_response = client.chat.completions.create(
+        response = client.chat.completions.create(
             model="llama3-8b-8192",
             messages=[
-                {"role": "system", "content": "You are a personal branding assistant."},
+                {"role": "system", "content": "You are a helpful portfolio generator bot."},
                 {"role": "user", "content": final_prompt},
             ],
         )
 
-        final_content = final_response.choices[0].message.content.strip()
-
-        return {
-            "success": True,
-            "content": final_content
-        }
+        content = response.choices[0].message.content.strip()
+        import json
+        return json.loads(content)
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": "groq_api_error"
-        }
+        return {"success": False, "error": str(e), "error_type": "groq_api_error"}
 
 @app.get("/")
 def read_root():
-    return {"message": "Hello! Your backend is working."}
+    return {"message": "Hello! Your backend is running."}
 
 def extract_text_from_pdf(file_path: str) -> str:
     text = ""
@@ -140,27 +132,22 @@ def extract_text_from_docx(file_path: str) -> str:
 @app.post("/upload-resume/")
 async def upload_resume(file: UploadFile = File(...)):
     if not file.filename.endswith((".pdf", ".docx")):
-        raise HTTPException(status_code=400, detail="Only PDF or DOCX files are allowed")
+        raise HTTPException(status_code=400, detail="Only PDF or DOCX allowed.")
 
     os.makedirs("temp_files", exist_ok=True)
-    file_location = f"temp_files/{file.filename}"
-    with open(file_location, "wb") as f:
+    file_path = f"temp_files/{file.filename}"
+    with open(file_path, "wb") as f:
         f.write(await file.read())
 
     if file.filename.endswith(".pdf"):
-        extracted_text = extract_text_from_pdf(file_location)
+        resume_text = extract_text_from_pdf(file_path)
     else:
-        extracted_text = extract_text_from_docx(file_location)
+        resume_text = extract_text_from_docx(file_path)
 
-    portfolio = generate_portfolio_content(extracted_text)
+    os.remove(file_path)
+    portfolio = generate_portfolio_content(resume_text)
 
-    if not portfolio["success"]:
-        raise HTTPException(status_code=400, detail=portfolio["error"])
-    os.remove(file_location)
+    if not isinstance(portfolio, dict) or "html_code" not in portfolio:
+        raise HTTPException(status_code=500, detail=portfolio.get("error", "Failed to generate portfolio"))
 
-
-    return {
-  "html_code": "<html>...</html>",
-  "css_code": "body { ... }",
-  "js_code": "console.log('Hello')"
-}
+    return portfolio
