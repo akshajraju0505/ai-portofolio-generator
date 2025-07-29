@@ -86,44 +86,49 @@ def summarize(client, chunk, i):
     )
     return resp.choices[0].message.content.strip()
 
+import re
+
+def safe_parse_llm_json(text: str):
+    # Remove code block wrapper if present
+    if text.strip().startswith("```"):
+        text = re.sub(r"^```(json)?", "", text.strip(), flags=re.IGNORECASE).strip()
+        text = re.sub(r"```$", "", text.strip())
+
+    # Replace single quotes with double quotes if needed
+    if "'" in text and '"' not in text:
+        text = text.replace("'", '"')
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Invalid JSON from model: {str(e)}")
+
 def generate_code_from_summary(client, summary):
     prompt = f"""
-You are a portfolio website generator AI.
+Using the resume summary below, generate 3 separate code files:
 
-Generate 3 files from the following resume summary:
+1. A valid `index.html` using semantic HTML with Tailwind CSS linked (via <link href="style.css">).
+2. A simple `style.css` file for layout and colors.
+3. A `script.js` file with minimal interactivity (if needed).
 
-1. `index.html`:
-   - Use semantic HTML
-   - Add `<script src="https://cdn.tailwindcss.com"></script>` in the `<head>`
-   - Link to `style.css`
+Respond ONLY with a JSON object like this:
 
-2. `style.css`: Minimal styles only
-
-3. `script.js`: Minimal interaction or console log
-
-Respond ONLY with a JSON object like:
 {{
   "html_code": "<!DOCTYPE html>...",
   "css_code": "body {{ background: white; }}",
-  "js_code": "console.log('Hello')"
+  "js_code": "console.log('...');"
 }}
 
 Resume Summary:
 {summary}
 """
-
     resp = client.chat.completions.create(
         model="llama3-8b-8192",
         messages=[{"role": "user", "content": prompt}]
     )
 
-    raw = resp.choices[0].message.content.strip()
-    logger.debug("Raw model response: %s", repr(raw))
-
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=500, detail=f"Invalid JSON from model: {str(e)}")
+    text = resp.choices[0].message.content.strip()
+    return safe_parse_llm_json(text)
 
 
 @app.post("/upload-resume/")
