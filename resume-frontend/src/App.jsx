@@ -399,9 +399,9 @@ Generated on: ${new Date().toLocaleString()}
               </button>
             </div>
 
-            <div className="mt-6 space-y-4">
-              {/* Code Editor - Much Larger */}
-              <div className="border rounded-lg overflow-hidden h-[700px]">
+            <div className="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* Code Editor */}
+              <div className="border rounded-lg overflow-hidden h-[600px]">
                 <div className="bg-gray-800 text-white px-4 py-2 text-sm font-medium">
                   {activeTab.toUpperCase()} Editor
                 </div>
@@ -419,28 +419,28 @@ Generated on: ${new Date().toLocaleString()}
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
                     padding: { top: 20, bottom: 20 },
-                    lineHeight: 26
+                    lineHeight: 26,
                   }}
-                  loading={
+                  loading={(
                     <div className="flex items-center justify-center h-full">
                       <div className="text-center">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
                         <p className="text-gray-600">Loading editor...</p>
                       </div>
                     </div>
-                  }
+                  )}
                 />
               </div>
 
-              {/* Live Preview - Much Smaller */}
-              <div className="border rounded-lg overflow-hidden h-[250px] bg-white">
+              {/* Live Preview */}
+              <div className="border rounded-lg overflow-hidden h-[600px] bg-white">
                 <div className="bg-gray-100 text-gray-700 px-4 py-2 text-sm font-medium border-b">
                   Live Preview
                 </div>
                 <iframe
                   title="Live Preview"
                   srcDoc={`<html><head><style>${cssCode}</style></head><body>${htmlCode}<script>${jsCode}</script></body></html>`}
-                  className="w-full h-[calc(100%-40px)] border-none"
+                  className="w-full h-full border-none"
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>
