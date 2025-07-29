@@ -4,10 +4,12 @@ import pdfplumber
 import docx
 import logging
 from openai import OpenAI
-import requests
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi import Request
+from pydantic import BaseModel
+from deployer import deploy_html_code 
+import shutil
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,9 +21,44 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-load_dotenv()
 
-def generate_protfolio_content(resume_text: str) -> dict:
+load_dotenv()
+class DeployRequest(BaseModel):
+    html_code: str
+
+@app.post("/deploy-site/")
+async def deploy_site(data: DeployRequest):
+    try:
+        url = deploy_html_code(data.html_code)
+        return {"url": url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+def chunk_text(text, max_chunk_size=2000):
+    words = text.split()
+    chunks, current = [], ""
+    for word in words:
+        if len(current) + len(word) + 1 > max_chunk_size:
+            chunks.append(current)
+            current = word
+        else:
+            current += " " + word if current else word
+    if current:
+        chunks.append(current)
+    return chunks
+
+def summarize_chunk(client, chunk, index):
+    prompt = f"Summarize part {index+1} of a resume:\n\n{chunk}\n\nFocus on About, Skills, Work, and Projects."
+    response = client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[
+            {"role": "system", "content": "You are a personal branding assistant."},
+            {"role": "user", "content": prompt},
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+def generate_portfolio_content(resume_text: str) -> dict:
     if not resume_text or not resume_text.strip():
         return {
             "success": False,
@@ -29,43 +66,50 @@ def generate_protfolio_content(resume_text: str) -> dict:
             "error_type": "validation_error"
         }
 
-    if len(resume_text.strip()) < 50:
-        return {
-            "success": False,
-            "error": "Resume text too short (minimum 50 characters required)",
-            "error_type": "validation_error"
-        }
-
-    prompt = f"""
-    You are a personal branding assistant. Based on this resume text, generate:
-    1. A short "About Me" paragraph (2 to 3 sentences)
-    2. A bullet list of Skills
-    3. A Work Experience summary
-    4. 1 to 2 sample Project Descriptions
-
-    Resume Text:
-    {resume_text[:3000]}
-    """
-
     try:
         client = OpenAI(
             base_url="https://api.groq.com/openai/v1",
             api_key=os.getenv("GROQ_API_KEY"),
         )
 
-        response = client.chat.completions.create(
+        chunks = chunk_text(resume_text)
+        summaries = [summarize_chunk(client, chunk, idx) for idx, chunk in enumerate(chunks)]
+
+        combined_summary = "\n\n".join(summaries)
+
+        final_prompt = f"""
+You are a portfolio website generator AI.
+
+Using the following resume summary, generate a complete, single-file HTML portfolio website using Tailwind CSS.
+
+Requirements:
+- Use semantic HTML
+- Use modern, clean Tailwind CSS styling
+- Include the following sections:
+  - About Me
+  - Skills (as a bullet list)
+  - Work Experience (role, company, short description)
+  - Projects (project title, description, optional link)
+
+Only return the full HTML code (starting with <!DOCTYPE html>). No explanations.
+
+Resume Summary:
+{combined_summary}
+        """
+
+        final_response = client.chat.completions.create(
             model="llama3-8b-8192",
             messages=[
                 {"role": "system", "content": "You are a personal branding assistant."},
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": final_prompt},
             ],
         )
 
-        generated_text = response.choices[0].message.content
+        final_content = final_response.choices[0].message.content.strip()
 
         return {
             "success": True,
-            "content": generated_text  # ✅ fixed this line
+            "content": final_content
         }
 
     except Exception as e:
@@ -75,26 +119,23 @@ def generate_protfolio_content(resume_text: str) -> dict:
             "error_type": "groq_api_error"
         }
 
-
 @app.get("/")
 def read_root():
-    return {"message": "Hello! Your backend is working"}
+    return {"message": "Hello! Your backend is working."}
 
-
-def extract_text_from_pdf(file_path:str) -> str:
+def extract_text_from_pdf(file_path: str) -> str:
     text = ""
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
             text += page.extract_text() or ""
-    return text 
+    return text
 
 def extract_text_from_docx(file_path: str) -> str:
     text = ""
     doc = docx.Document(file_path)
     for para in doc.paragraphs:
         text += para.text + "\n"
-    return text 
-
+    return text
 
 @app.post("/upload-resume/")
 async def upload_resume(file: UploadFile = File(...)):
@@ -102,7 +143,6 @@ async def upload_resume(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files are allowed")
 
     os.makedirs("temp_files", exist_ok=True)
-
     file_location = f"temp_files/{file.filename}"
     with open(file_location, "wb") as f:
         f.write(await file.read())
@@ -112,13 +152,15 @@ async def upload_resume(file: UploadFile = File(...)):
     else:
         extracted_text = extract_text_from_docx(file_location)
 
-    portfolio = generate_protfolio_content(extracted_text)
+    portfolio = generate_portfolio_content(extracted_text)
 
     if not portfolio["success"]:
         raise HTTPException(status_code=400, detail=portfolio["error"])
+    os.remove(file_location)
+
 
     return {
-        "filename": file.filename,
-        "message": "Resume uploaded successfully and processed with LLaMA",
-        "generated_content": portfolio["content"]
-    }
+  "html_code": "<html>...</html>",
+  "css_code": "body { ... }",
+  "js_code": "console.log('Hello')"
+}
