@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Editor } from '@monaco-editor/react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -14,9 +14,19 @@ function App() {
   const [deploying, setDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState('');
   const [activeTab, setActiveTab] = useState('html');
+  const dropRef = useRef(null);
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
   const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      resetState();
+    }
+  };
+
+  const resetState = () => {
     setError('');
     setHtmlCode('');
     setCssCode('');
@@ -25,41 +35,49 @@ function App() {
     setDeployedUrl('');
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && (droppedFile.type === 'application/pdf' || droppedFile.name.endsWith('.docx'))) {
+      setFile(droppedFile);
+      resetState();
+    } else {
+      setError('Only PDF or DOCX files are supported.');
+    }
+  };
+
+  const handleDragOver = (e) => e.preventDefault();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) {
-      setError('Please select a file first.');
-      return;
-    }
+    if (!file) return setError('Please select a file.');
 
     const formData = new FormData();
     formData.append('file', file);
 
     setLoading(true);
-    setError('');
-    setHtmlCode('');
-    setCssCode('');
-    setJsCode('');
-    setShowEditor(false);
-    setDeployedUrl('');
+    resetState();
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/upload-resume/`, {
+      const res = await fetch(`${backendUrl}/upload-resume/`, {
         method: 'POST',
         body: formData,
       });
 
-      const data = await res.json();
+      const text = await res.text(); // safer than .json() in case of error
+      const data = JSON.parse(text);
+
       if (!res.ok) {
-        setError(data.detail || 'Something went wrong');
-      } else {
-        setHtmlCode(data.html_code || '');
-        setCssCode(data.css_code || '');
-        setJsCode(data.js_code || '');
-        setShowEditor(true);
+        throw new Error(data.detail || 'Something went wrong');
       }
+
+      setHtmlCode(data.html_code || '<!-- No HTML generated -->');
+      setCssCode(data.css_code || '/* No CSS generated */');
+      setJsCode(data.js_code || '// No JS generated');
+      setShowEditor(true);
     } catch (err) {
-      setError('Failed to connect to backend.');
+      console.error(err);
+      setError(err.message || 'Failed to connect to backend.');
     }
 
     setLoading(false);
@@ -71,7 +89,7 @@ function App() {
     setError('');
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/deploy-site/`, {
+      const res = await fetch(`${backendUrl}/deploy-site/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -81,14 +99,17 @@ function App() {
         }),
       });
 
-      const data = await res.json();
+      const text = await res.text();
+      const data = JSON.parse(text);
+
       if (!res.ok) {
-        setError(data.detail || 'Deployment failed');
-      } else {
-        setDeployedUrl(data.url);
+        throw new Error(data.detail || 'Deployment failed');
       }
+
+      setDeployedUrl(data.url);
     } catch (err) {
-      setError('Failed to deploy the site.');
+      console.error(err);
+      setError(err.message || 'Failed to deploy.');
     }
 
     setDeploying(false);
@@ -120,21 +141,33 @@ function App() {
         <h1 className="text-2xl font-bold mb-4 text-center">AI Resume to Portfolio Generator</h1>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="file"
-            accept=".pdf,.docx"
-            onChange={handleFileChange}
-            className="block w-full p-2 border rounded"
-          />
+          <div
+            ref={dropRef}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className="w-full border-2 border-dashed border-gray-400 rounded p-6 text-center text-gray-500 hover:border-blue-600"
+          >
+            <p>Drag and drop your resume here or click below</p>
+            <input
+              type="file"
+              accept=".pdf,.docx"
+              onChange={handleFileChange}
+              className="block w-full mt-2"
+            />
+          </div>
+
           <button
             type="submit"
             className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition"
+            disabled={loading}
           >
             {loading ? 'Uploading & Processing...' : 'Generate Portfolio'}
           </button>
         </form>
 
-        {error && <div className="mt-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>}
+        {error && (
+          <div className="mt-4 p-2 bg-red-100 text-red-700 rounded">{error}</div>
+        )}
 
         {showEditor && (
           <>
@@ -162,7 +195,7 @@ function App() {
                   height="100%"
                   defaultLanguage={activeTab}
                   value={getCurrentCode()}
-                  onChange={(value) => setCurrentCode(value)}
+                  onChange={(value) => setCurrentCode(value || '')}
                   theme="vs-dark"
                   loading={<div className="text-center p-4">Loading editor...</div>}
                 />
