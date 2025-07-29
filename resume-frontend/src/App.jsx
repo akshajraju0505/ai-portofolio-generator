@@ -121,7 +121,8 @@ function App() {
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-screen-xl mx-auto bg-white p-6 rounded shadow-lg">
         <h1 className="text-3xl font-bold text-center mb-4">AI Resume to Portfolio Generator</h1>
-        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
+
+        <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-6">
           <input type="file" accept=".pdf,.docx" onChange={handleFileChange} />
           <button
             type="submit"
@@ -138,7 +139,7 @@ function App() {
         {showEditor && (
           <>
             {/* Tabs */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
               {['html', 'css', 'js'].map((tab) => (
                 <button
                   key={tab}
@@ -158,13 +159,15 @@ function App() {
               </button>
             </div>
 
-            {/* Resizable Panels */}
+            {/* Resizable Editor/Preview */}
             <div className="h-[600px] border rounded-lg overflow-hidden">
               <PanelGroup direction="horizontal">
-                <Panel defaultSize={60}>
+                <Panel defaultSize={60} minSize={30}>
                   <Editor
                     height="100%"
-                    language={activeTab === 'html' ? 'html' : activeTab === 'css' ? 'css' : 'javascript'}
+                    language={
+                      activeTab === 'html' ? 'html' : activeTab === 'css' ? 'css' : 'javascript'
+                    }
                     value={getCurrentCode()}
                     onChange={(value) => setCurrentCode(value || '')}
                     theme="vs-dark"
@@ -175,8 +178,8 @@ function App() {
                     }}
                   />
                 </Panel>
-                <PanelResizeHandle className="w-2 bg-gray-200 cursor-col-resize" />
-                <Panel defaultSize={40}>
+                <PanelResizeHandle className="w-2 bg-gray-300 cursor-col-resize" />
+                <Panel defaultSize={40} minSize={30}>
                   <iframe
                     title="Live Preview"
                     className="w-full h-full border-none"
